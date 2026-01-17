@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Game {
+  id          String    @id @default(cuid())
+  status      String    @default("pending") // pending, active, completed
+  winner      String?   // player1, player2, or null (draw/ongoing)
+  
+  player1Provider   String
+  player1Model      String
+  player1Name       String
+  player1Position   Int       @default(0)
+  
+  player2Provider   String
+  player2Model      String
+  player2Name       String
+  player2Position   Int       @default(0)
+  
+  currentPlayer     Int       @default(1) // 1 or 2
+  
+  turns       Turn[]
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+}
+
+model Turn {
+  id          String   @id @default(cuid())
+  game        Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  gameId      String
+  
+  turnNumber  Int
+  playerNum   Int      // 1 or 2
+  provider    String
+  model       String
+  
+  diceRoll    Int
+  fromPos     Int
+  toPos       Int
+  finalPos    Int      // After snake/ladder
+  
+  event       String?  // "snake", "ladder", or null
+  eventFrom   Int?     // Position before snake/ladder
+  eventTo     Int?     // Position after snake/ladder
+  
+  preRollCommentary   String?  // AI's thoughts before rolling
+  postRollCommentary  String?  // AI's reaction after rolling
+  trashTalk           String?  // AI's competitive banter
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([gameId])
+}
+
+model Leaderboard {
+  id         String @id @default(cuid())
+  provider   String
+  model      String
+  wins       Int    @default(0)
+  losses     Int    @default(0)
+  gamesPlayed Int   @default(0)
+  
+  @@unique([provider, model])
+}
