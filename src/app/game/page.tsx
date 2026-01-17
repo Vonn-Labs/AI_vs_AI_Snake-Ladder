@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
 import { Board, Dice, PlayerSetup, Commentary, GameStatus } from '@/components/game';
 import { Button } from '@/components/ui/button';
 import { GameState, Turn, AIProvider } from '@/lib/game/types';
@@ -113,7 +114,6 @@ export default function GamePage() {
         debug.log('Dice', 'Starting dice roll animation...');
 
         try {
-            // Execute the turn first to get dice result
             debug.log('GameEngine', 'Executing turn...');
             const turnResult = executeTurn(currentGameState);
 
@@ -126,7 +126,6 @@ export default function GamePage() {
 
             setCurrentDiceValue(turnResult.turn.diceRoll);
 
-            // Build contexts for AI commentary
             const gameContext: GameContext = {
                 playerName: currentPlayer.name,
                 playerNumber: currentGameState.currentPlayer,
@@ -161,7 +160,6 @@ export default function GamePage() {
                 isWinningMove: turnResult.isGameOver,
             };
 
-            // Generate AI commentary
             debug.log('AI', `Requesting commentary from ${currentPlayer.provider}/${currentPlayer.model}...`);
             let commentary = {
                 preRollCommentary: 'Rolling the dice...',
@@ -182,7 +180,6 @@ export default function GamePage() {
                 debug.error('AI', 'Failed to generate commentary', aiError);
             }
 
-            // Update turn with commentary
             const turnWithCommentary: Turn = {
                 ...turnResult.turn,
                 preRollCommentary: commentary.preRollCommentary,
@@ -190,7 +187,6 @@ export default function GamePage() {
                 trashTalk: commentary.trashTalk,
             };
 
-            // Update game state with the new turn
             const updatedGameState: GameState = {
                 ...turnResult.gameState,
                 turns: [...currentGameState.turns, turnWithCommentary],
@@ -207,12 +203,10 @@ export default function GamePage() {
             setIsRolling(false);
             isExecutingTurn.current = false;
 
-            // Check if game is over
             if (turnResult.isGameOver) {
                 debug.success('Game', `🎉 GAME OVER! Player ${updatedGameState.winner} wins!`);
                 setIsPlaying(false);
 
-                // Save to database
                 try {
                     debug.log('Database', 'Saving game to database...');
                     await fetch('/api/game', {
@@ -238,7 +232,7 @@ export default function GamePage() {
         }
     }, []);
 
-    // Game loop effect - runs when isPlaying changes
+    // Game loop effect
     useEffect(() => {
         let isMounted = true;
 
@@ -248,7 +242,6 @@ export default function GamePage() {
                 return;
             }
 
-            // Get the current game state from the state
             const currentState = gameState;
             if (!currentState || currentState.status !== 'active') {
                 debug.log('GameLoop', 'No active game state');
@@ -264,14 +257,12 @@ export default function GamePage() {
                 debug.log('GameLoop', `Scheduling next turn in ${turnDelay}ms`);
                 gameLoopRef.current = setTimeout(() => {
                     if (isMounted) {
-                        // Force re-run the effect by triggering a state update
                         setGameState(prev => prev ? { ...prev } : null);
                     }
                 }, turnDelay);
             }
         };
 
-        // Only run if we have an active game
         if (isPlaying && !isPaused && gameState?.status === 'active' && !isExecutingTurn.current) {
             runLoop();
         }
@@ -284,7 +275,6 @@ export default function GamePage() {
         };
     }, [isPlaying, isPaused, gameState, turnDelay, executeSingleTurn]);
 
-    // Handle start game button
     const handleStartGame = useCallback(() => {
         debug.log('UI', '🚀 Start Game button clicked');
         const newGame = startGame();
@@ -293,14 +283,12 @@ export default function GamePage() {
         }
     }, [startGame]);
 
-    // Toggle pause
     const togglePause = useCallback(() => {
         const newPausedState = !isPaused;
         debug.log('UI', newPausedState ? '⏸️ Game paused' : '▶️ Game resumed');
         setIsPaused(newPausedState);
     }, [isPaused]);
 
-    // Reset game
     const resetGame = useCallback(() => {
         debug.log('UI', '🔄 Resetting game');
         if (gameLoopRef.current) {
@@ -318,38 +306,71 @@ export default function GamePage() {
     const canStartGame = player1Config?.apiKey && player2Config?.apiKey;
 
     return (
-        <div className="min-h-screen py-8 px-4 bg-gradient-to-br from-background via-background to-primary/5">
-            <div className="max-w-7xl mx-auto">
+        <div className="min-h-screen noise">
+            {/* Animated Background */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute -top-40 -right-40 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-float" />
+                <div className="absolute top-1/2 -left-40 w-80 h-80 bg-cyan-500/20 rounded-full blur-3xl animate-float" style={{ animationDelay: '-2s' }} />
+                <div className="absolute -bottom-40 right-1/3 w-72 h-72 bg-pink-500/20 rounded-full blur-3xl animate-float" style={{ animationDelay: '-4s' }} />
+            </div>
+
+            {/* Navigation */}
+            <nav className="relative z-20 glass border-b border-white/5">
+                <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+                    <Link href="/" className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-xl">
+                            🎲
+                        </div>
+                        <span className="font-bold text-lg tracking-tight">AI Arena</span>
+                    </Link>
+                    <div className="flex items-center gap-4">
+                        <Link href="/leaderboard" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                            Leaderboard
+                        </Link>
+                    </div>
+                </div>
+            </nav>
+
+            <main className="relative z-10 max-w-[1600px] mx-auto px-6 py-8">
                 {/* Header */}
                 <motion.div
-                    className="text-center mb-8"
+                    className="text-center mb-10"
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                 >
-                    <h1 className="text-4xl md:text-5xl font-bold mb-2">
-                        <span className="bg-gradient-to-r from-primary via-purple-500 to-pink-500 bg-clip-text text-transparent">AI vs AI</span>
-                        <span className="text-foreground"> Snake & Ladder</span>
+                    <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3">
+                        <span className="gradient-text">AI Battle</span>
+                        <span className="text-foreground"> Arena</span>
                     </h1>
                     <p className="text-muted-foreground text-lg">
-                        Watch AI language models battle it out! 🤖 vs 🤖
+                        Configure your AI fighters and watch them compete! 🤖 ⚔️ 🤖
                     </p>
                 </motion.div>
 
                 {/* Error Message */}
-                {error && (
-                    <motion.div
-                        className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-xl text-destructive text-center"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                    >
-                        {error}
-                    </motion.div>
-                )}
+                <AnimatePresence>
+                    {error && (
+                        <motion.div
+                            className="mb-8 p-4 glass rounded-2xl border border-red-500/30 text-red-400 text-center max-w-2xl mx-auto"
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                        >
+                            <span className="mr-2">⚠️</span>
+                            {error}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
-                {/* Main Content - Wider gaps and proper column sizing */}
-                <div className="grid lg:grid-cols-[320px_1fr_320px] gap-8 xl:gap-12">
+                {/* Main Game Layout */}
+                <div className="grid lg:grid-cols-[380px_1fr_380px] gap-8">
                     {/* Left Column - Player Setup or Game Status */}
-                    <div className="space-y-6">
+                    <motion.div
+                        className="space-y-6"
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.1 }}
+                    >
                         {!gameState ? (
                             <>
                                 <PlayerSetup
@@ -378,10 +399,11 @@ export default function GamePage() {
                                 <Button
                                     onClick={handleStartGame}
                                     disabled={!canStartGame}
-                                    className="flex-1 bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90"
+                                    className="flex-1 btn-premium py-6 text-lg rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed"
                                     size="lg"
                                 >
-                                    🎮 Start Game
+                                    <span className="mr-2">⚔️</span>
+                                    Start Battle
                                 </Button>
                             ) : (
                                 <>
@@ -389,7 +411,7 @@ export default function GamePage() {
                                         <Button
                                             onClick={togglePause}
                                             variant="outline"
-                                            className="flex-1"
+                                            className="flex-1 py-6 text-lg rounded-2xl glass border-white/10 hover:bg-white/5"
                                             size="lg"
                                         >
                                             {isPaused ? '▶️ Resume' : '⏸️ Pause'}
@@ -398,7 +420,7 @@ export default function GamePage() {
                                     <Button
                                         onClick={resetGame}
                                         variant="outline"
-                                        className="flex-1"
+                                        className="flex-1 py-6 text-lg rounded-2xl glass border-white/10 hover:bg-white/5"
                                         size="lg"
                                     >
                                         🔄 New Game
@@ -406,28 +428,44 @@ export default function GamePage() {
                                 </>
                             )}
                         </div>
-                    </div>
+                    </motion.div>
 
                     {/* Center Column - Game Board */}
-                    <div className="lg:col-span-1 flex flex-col items-center">
+                    <motion.div
+                        className="flex flex-col items-center justify-start"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.2 }}
+                    >
                         <Board
                             player1Position={gameState?.player1.position || 0}
                             player2Position={gameState?.player2.position || 0}
                         />
 
                         {/* Dice Display */}
-                        {gameState && (
-                            <div className="flex justify-center mt-6">
-                                <Dice
-                                    value={currentDiceValue}
-                                    isRolling={isRolling}
-                                />
-                            </div>
-                        )}
-                    </div>
+                        <AnimatePresence>
+                            {gameState && (
+                                <motion.div
+                                    className="mt-8"
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.8 }}
+                                >
+                                    <Dice
+                                        value={currentDiceValue}
+                                        isRolling={isRolling}
+                                    />
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </motion.div>
 
                     {/* Right Column - Commentary */}
-                    <div className="lg:col-span-1">
+                    <motion.div
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.3 }}
+                    >
                         <Commentary
                             turns={gameState?.turns || []}
                             player1Name={gameState?.player1.name || 'Player 1'}
@@ -435,22 +473,19 @@ export default function GamePage() {
                             player1Provider={gameState?.player1.provider || 'openai'}
                             player2Provider={gameState?.player2.provider || 'anthropic'}
                         />
-                    </div>
+                    </motion.div>
                 </div>
 
                 {/* Footer */}
                 <motion.div
-                    className="text-center mt-12 text-muted-foreground text-sm"
+                    className="text-center mt-16 text-muted-foreground text-sm"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.5 }}
                 >
                     <p>🔒 API keys are stored locally in your browser and never sent to our servers.</p>
-                    <p className="mt-1">
-                        Made with ❤️ for AI enthusiasts
-                    </p>
                 </motion.div>
-            </div>
+            </main>
         </div>
     );
 }
